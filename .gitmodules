@@ -1,0 +1,6 @@
+[submodule "submodules/NeoRL"]
+	path = submodules/NeoRL
+	url = https://agit.ai/Polixir/NeoRL
+[submodule "submodules/OfflineRL"]
+	path = submodules/OfflineRL
+	url = https://agit.ai/Polixir/OfflineRL
