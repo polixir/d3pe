@@ -3,3 +3,4 @@ ope_plots/
 *.json
 *.egg-info
 *__pycache__
+benchmarks/
