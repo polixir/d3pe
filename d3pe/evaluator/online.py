@@ -51,4 +51,4 @@ class OnlineEvaluator(Evaluator):
         policy = deepcopy(policy).cpu()
         if not ray.is_initialized():
             ray.init(ignore_reinit_error=True)
-        return test_on_real_env(self.env, policy)
+        return test_on_real_env(self.env, policy)['online_reward']

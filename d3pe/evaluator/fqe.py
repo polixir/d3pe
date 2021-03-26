@@ -14,7 +14,7 @@ class FQEEvaluator(Evaluator):
                    pretrain : bool = False, 
                    critic_hidden_features : int = 1024,
                    critic_hidden_layers : int = 4,
-                   critic_type : str = 'mlp',
+                   critic_type : str = 'distributional',
                    atoms : int = 51,
                    discount : float = 0.99,
                    device : str = "cuda" if torch.cuda.is_available() else "cpu",
@@ -61,15 +61,15 @@ class FQEEvaluator(Evaluator):
         self.is_initialized = True
 
     def __call__(self, policy) -> dict:
-        assert self.is_initialized, "`initialize` should be called before callback."
+        assert self.is_initialized, "`initialize` should be called before call."
 
         policy = deepcopy(policy)
         policy = policy.to(self.device)
 
         if self.pretrain:
-            critic = self.train_estimator(policy, self.init_critic, num_steps=100000)
+            critic = self.train_estimator(policy, self.init_critic, num_steps=250000)
         else:
-            critic = self.train_estimator(policy, num_steps=1000000)
+            critic = self.train_estimator(policy, num_steps=500000)
 
         if self.dataset.has_trajectory:
             data = self.dataset.get_initial_states()
@@ -92,14 +92,12 @@ class FQEEvaluator(Evaluator):
                     estimate_q0.append(q.cpu())
         estimate_q0 = torch.cat(estimate_q0, dim=0)
 
-        return {
-            "FQE" : estimate_q0.mean().item(),
-        }
+        return estimate_q0.mean().item()
 
     def train_estimator(self,
                         policy,
                         init_critic=None,
-                        num_steps=250000,
+                        num_steps=500000,
                         batch_size=256,
                         verbose=False):
 
@@ -128,7 +126,7 @@ class FQEEvaluator(Evaluator):
             a = data['action']
 
             o_ = data['next_obs']
-            a_ = policy.get_action(o_)
+            a_ = torch.as_tensor(policy.get_action(o_), dtype=torch.float32, device=self.device)
 
             if self.critic_type == 'mlp':
                 q_target = target_critic(torch.cat((o_, a_), -1)).detach()
