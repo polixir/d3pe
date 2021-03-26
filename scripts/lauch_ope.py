@@ -7,15 +7,14 @@ import argparse
 from tqdm import tqdm
 
 from d3pe.utils.func import get_evaluator_by_name
-from d3pe.utils.env import get_env
+from d3pe.utils.data import get_neorl_datasets
 
 BenchmarkFolder = 'benchmarks'
 
 @ray.remote(num_gpus=1)
 def get_ope(policy, ope_algo : str, task_name : str, task_level : str, task_amount : int):
     evaluator = get_evaluator_by_name(ope_algo)()
-    env = get_env(task_name)
-    train_dataset, val_dataset = env.get_dataset(data_type=task_level, train_num=task_amount)
+    train_dataset, val_dataset = get_neorl_datasets(task_name, task_level, task_amount)
     evaluator.initialize(train_dataset, val_dataset, task=task_name)
     return evaluator(policy)
 
