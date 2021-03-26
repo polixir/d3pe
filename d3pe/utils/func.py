@@ -13,3 +13,13 @@ def soft_clamp(x : torch.Tensor,
     if _min is not None:
         x = _min + F.softplus(x - _min)
     return x
+
+def get_evaluator_by_name(ope_algo : str):
+    if ope_algo == 'online':
+        from d3pe.evaluator.online import OnlineEvaluator
+        return OnlineEvaluator
+    elif ope_algo == 'fqe':
+        from d3pe.evaluator.fqe import FQEEvaluator
+        return FQEEvaluator
+    else:
+        raise KeyError(f'Algorithm {ope_algo} is not supported!')
