@@ -55,7 +55,7 @@ if __name__ == '__main__':
     
     for task_domain in ['HalfCheetah-v3', 'Hopper-v3', 'Walker2d-v3', 'ib', 'finance', 'citylearn']:
         for task_level in ['low', 'medium', 'high']:
-            for task_amount in [99, 999, 999] if not task_domain == 'finance' else [99, 999]:
+            for task_amount in [99, 999, 9999] if not task_domain == 'finance' else [99, 999]:
                 task = f'{task_domain}-{task_level}-{task_amount}'
                 print(f'Creating benchmark for {task}')
                 task_folders = [os.path.join(models_folder, task_folder) for task_folder in filter(lambda x: task + '-' in x, os.listdir(models_folder))]
