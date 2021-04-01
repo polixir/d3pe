@@ -3,12 +3,12 @@ import gym
 import numpy as np
 from copy import deepcopy
 
-from d3pe.evaluator import Evaluator
+from d3pe.evaluator import Evaluator, Policy
 from d3pe.utils.data import OPEDataset
 from d3pe.utils.env import get_env
 
 @ray.remote
-def test_one_trail(env : gym.Env, policy):
+def test_one_trail(env : gym.Env, policy : Policy):
     env = deepcopy(env)
     policy = deepcopy(policy)
 
@@ -24,7 +24,7 @@ def test_one_trail(env : gym.Env, policy):
 
     return (rewards, lengths)
 
-def test_on_real_env(env : gym.Env, policy, number_of_runs : int = 10):
+def test_on_real_env(env : gym.Env, policy : Policy, number_of_runs : int = 10):
     rewards = []
     episode_lengths = []
 
@@ -46,7 +46,7 @@ class OnlineEvaluator(Evaluator):
         self.env = get_env(self.task)
         self.is_initialized = True
 
-    def __call__(self, policy) -> dict:
+    def __call__(self, policy : Policy) -> dict:
         assert self.is_initialized, "`initialize` should be called before callback."
         policy = deepcopy(policy).cpu()
         if not ray.is_initialized():

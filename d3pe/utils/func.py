@@ -23,5 +23,8 @@ def get_evaluator_by_name(ope_algo : str):
     elif ope_algo == 'mbope':
         from d3pe.evaluator.mbope import MBOPEEvaluator
         return MBOPEEvaluator
+    elif ope_algo == 'is':
+        from d3pe.evaluator.IS import ISEvaluator
+        return ISEvaluator
     else:
         raise KeyError(f'Algorithm {ope_algo} is not supported!')

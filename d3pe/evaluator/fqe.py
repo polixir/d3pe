@@ -3,8 +3,9 @@ from copy import deepcopy
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
-from d3pe.evaluator import Evaluator
+from d3pe.evaluator import Evaluator, Policy
 from d3pe.utils.data import OPEDataset, to_torch
+from d3pe.utils.tools import bc
 from d3pe.utils.net import MLP, GaussianActor, DistributionalCritic
 
 class FQEEvaluator(Evaluator):
@@ -16,7 +17,7 @@ class FQEEvaluator(Evaluator):
                    critic_hidden_layers : int = 4,
                    critic_type : str = 'distributional',
                    atoms : int = 51,
-                   discount : float = 0.99,
+                   gamma : float = 0.99,
                    device : str = "cuda" if torch.cuda.is_available() else "cpu",
                    log : str = None,
                    *args, **kwargs):
@@ -27,14 +28,14 @@ class FQEEvaluator(Evaluator):
         self.critic_hidden_layers = critic_hidden_layers
         self.critic_type = critic_type
         self.atoms = atoms
-        self.discount = discount
+        self.gamma = gamma
         self.device = device
         self.writer = SummaryWriter(log) if log is not None else None
 
         self.min_reward = self.dataset[:]['reward'].min()
         self.max_reward = self.dataset[:]['reward'].max()
-        self.max_value = (1.2 * self.max_reward - 0.2 * self.min_reward) / (1 - self.discount)
-        self.min_value = (1.2 * self.min_reward - 0.2 * self.max_reward) / (1 - self.discount)
+        self.max_value = (1.2 * self.max_reward - 0.2 * self.min_reward) / (1 - self.gamma)
+        self.min_value = (1.2 * self.min_reward - 0.2 * self.max_reward) / (1 - self.gamma)
 
         if self.pretrain:
             '''implement a base value function here'''
@@ -43,15 +44,7 @@ class FQEEvaluator(Evaluator):
             data = self.dataset[0]
             policy = GaussianActor(data['obs'].shape[-1], data['action'].shape[-1], 1024, 2).to(self.device)
             optim = torch.optim.Adam(policy.parameters(), lr=1e-3)
-            for i in tqdm(range(10000)):
-                data = self.dataset.sample(256)
-                data = to_torch(data, device=self.device)
-                action_dist = policy(data['obs'])
-                loss = - action_dist.log_prob(data['action']).mean()
-                
-                optim.zero_grad()
-                loss.backward()
-                optim.step()
+            policy = bc(self.dataset, policy, optim, steps=10000)
 
             policy.get_action = lambda x: policy(x).mean
             self.init_critic = self.train_estimator(policy, num_steps=100000)
@@ -60,7 +53,7 @@ class FQEEvaluator(Evaluator):
 
         self.is_initialized = True
 
-    def __call__(self, policy) -> dict:
+    def __call__(self, policy : Policy) -> dict:
         assert self.is_initialized, "`initialize` should be called before call."
 
         policy = deepcopy(policy)
@@ -83,7 +76,7 @@ class FQEEvaluator(Evaluator):
         with torch.no_grad():
             for o in batches:
                 o = o.to(self.device)
-                a = policy.get_action(o)
+                a = torch.as_tensor(policy.get_action(o)).to(o)
                 if self.critic_type == 'mlp':
                     init_sa = torch.cat((o, a), -1).to(self.device)
                     estimate_q0.append(critic(init_sa).cpu())
@@ -116,7 +109,6 @@ class FQEEvaluator(Evaluator):
         if verbose:
             counter = tqdm(total=num_steps)
 
-        print('Training Fqe...')
         for t in range(num_steps):
             batch = self.dataset.sample(batch_size)
             data = to_torch(batch, torch.float32, device=self.device)
@@ -130,7 +122,7 @@ class FQEEvaluator(Evaluator):
 
             if self.critic_type == 'mlp':
                 q_target = target_critic(torch.cat((o_, a_), -1)).detach()
-                current_discount = self.discount * (1 - terminals)
+                current_discount = self.gamma * (1 - terminals)
                 backup = r + current_discount * q_target
                 backup = torch.clamp(backup, self.min_value, self.max_value) # prevent explosion
                 
@@ -138,7 +130,7 @@ class FQEEvaluator(Evaluator):
                 critic_loss = ((q - backup) ** 2).mean()
             elif self.critic_type == 'distributional':
                 p, q = critic(o, a, with_q=True)
-                target_p = target_critic.get_target(o_, a_, r, self.discount * (1 - terminals))
+                target_p = target_critic.get_target(o_, a_, r, self.gamma * (1 - terminals))
                 critic_loss = - (target_p * torch.log(p + 1e-8)).mean()
 
             critic_optimizer.zero_grad()

@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
-from d3pe.evaluator import Evaluator
+from d3pe.evaluator import Evaluator, Policy
 from d3pe.utils.data import OPEDataset, to_torch
 from d3pe.utils.net import MLP
 
@@ -48,7 +48,7 @@ class MBOPEEvaluator(Evaluator):
 
         self.is_initialized = True
 
-    def __call__(self, policy) -> dict:
+    def __call__(self, policy : Policy) -> dict:
         assert self.is_initialized, "`initialize` should be called before call."
 
         init_state = self.dataset.get_initial_states()
