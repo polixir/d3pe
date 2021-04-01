@@ -1,8 +1,7 @@
-from typing import Optional, Union
 import torch
 from torch.functional import F
 
-from typing import *
+from typing import Optional, Union
 
 def soft_clamp(x : torch.Tensor, 
                _min : Optional[Union[torch.Tensor, float]] = None, 
@@ -21,5 +20,8 @@ def get_evaluator_by_name(ope_algo : str):
     elif ope_algo == 'fqe':
         from d3pe.evaluator.fqe import FQEEvaluator
         return FQEEvaluator
+    elif ope_algo == 'mbope':
+        from d3pe.evaluator.mbope import MBOPEEvaluator
+        return MBOPEEvaluator
     else:
         raise KeyError(f'Algorithm {ope_algo} is not supported!')
