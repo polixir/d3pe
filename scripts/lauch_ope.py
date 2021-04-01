@@ -11,7 +11,6 @@ from d3pe.utils.data import get_neorl_datasets
 
 BenchmarkFolder = 'benchmarks'
 
-@ray.remote(num_gpus=1)
 def get_ope(policy, ope_algo : str, task_name : str, task_level : str, task_amount : int):
     evaluator = get_evaluator_by_name(ope_algo)()
     train_dataset, val_dataset = get_neorl_datasets(task_name, task_level, task_amount)
@@ -25,6 +24,7 @@ if __name__ == '__main__':
     parser.add_argument('--amount', type=int)
     parser.add_argument('-on', '--output_name', type=str)
     parser.add_argument('-oa', '--ope_algo', type=str)
+    parser.add_argument('-ng', '--num_gpus', type=float, default=1.0)
     parser.add_argument('--address', type=str, default=None)
     args = parser.parse_args()
 
@@ -51,10 +51,11 @@ if __name__ == '__main__':
 
     # launch jobs
     pending_jobs = {}
+    ope_function = ray.remote(num_gpus=args.num_gpus)(get_ope)
     for policy_file in gt_json.keys():
         if not policy_file in output_json.keys():
             policy = torch.load(policy_file, map_location='cpu')
-            pending_jobs[get_ope.remote(policy, args.ope_algo, args.domain, args.level, args.amount)] = policy_file
+            pending_jobs[ope_function.remote(policy, args.ope_algo, args.domain, args.level, args.amount)] = policy_file
     
     # collecting results
     timer = tqdm(total=len(pending_jobs))
