@@ -26,6 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('-oa', '--ope_algo', type=str)
     parser.add_argument('-ng', '--num_gpus', type=float, default=1.0)
     parser.add_argument('--address', type=str, default=None)
+    parser.add_argument('-f', '--force', action='store_true', help='force means overwrite the existing results')
     args = parser.parse_args()
 
     # start or attach ray cluster
@@ -53,7 +54,7 @@ if __name__ == '__main__':
     pending_jobs = {}
     ope_function = ray.remote(num_gpus=args.num_gpus)(get_ope)
     for policy_file in gt_json.keys():
-        if not policy_file in output_json.keys():
+        if args.force or not policy_file in output_json.keys():
             policy = torch.load(policy_file, map_location='cpu')
             pending_jobs[ope_function.remote(policy, args.ope_algo, args.domain, args.level, args.amount)] = policy_file
     

@@ -19,7 +19,7 @@ if __name__ == '__main__':
 
     if not os.path.exists('ope_plots'): os.makedirs('ope_plots')
 
-    # create and load file
+    ''' load ope and gt values '''
     task = f'{args.domain}-{args.level}-{args.amount}'
     task_folder = os.path.join(BenchmarkFolder, task)
     evaluate_file = os.path.join(task_folder, args.evaluate_name + '.json')
@@ -36,7 +36,7 @@ if __name__ == '__main__':
         real_score.append(gt_json[key])
         esitmate_score.append(evaluate_json[key])
     
-    # evaluation
+    ''' evaluation '''
     print('RC score:', RC_score(real_score, esitmate_score))
     print('Top 1 mean:', TopK_score(real_score, esitmate_score, 1, 'mean'))
     print('Top 3 mean:', TopK_score(real_score, esitmate_score, 3, 'mean'))
@@ -46,6 +46,7 @@ if __name__ == '__main__':
     print('Top 5 max:', TopK_score(real_score, esitmate_score, 5, 'max'))
     print('Policy Mean Score:', get_policy_mean(real_score))
 
+    ''' plot '''
     plt.figure()
     gt_scale = 1 / (1 - 0.99) / 1000.0 if not 'finance' in task else 1 / (1 - 0.99) / 2516
     try:
