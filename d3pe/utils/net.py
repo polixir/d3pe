@@ -86,13 +86,10 @@ class GaussianActor(torch.nn.Module):
 
         self.backbone = MLP(obs_dim, 2 * action_dim, features, layers)
 
-        self.max_logstd = nn.Parameter(torch.ones(action_dim) * 0, requires_grad=True)
-        self.min_logstd = nn.Parameter(torch.ones(action_dim) * -10, requires_grad=True)
-
     def forward(self, obs):
         output = self.backbone(obs)
         mu, log_std = torch.chunk(output, 2, dim=-1)
-        log_std = soft_clamp(log_std, self.min_logstd, self.max_logstd)
+        log_std = soft_clamp(log_std, -2, 2)
         std = torch.exp(log_std)
         return torch.distributions.Normal(mu, std)
 
@@ -115,15 +112,15 @@ class DistributionalCritic(torch.nn.Module):
         self.register_buffer('z', torch.linspace(min_value, max_value, atoms))
         self.delta_z = (max_value - min_value) / (atoms - 1)
 
-    def forward(self, obs, action, with_q=False):
+    def forward(self, obs, action, with_p=False):
         obs_action = torch.cat([obs, action], dim=-1)
         logits = self.net(obs_action)
         p = torch.softmax(logits, dim=-1)
-        if with_q:
-            q = torch.sum(p * self.z, dim=-1, keepdim=True)
-            return p, q
+        q = torch.sum(p * self.z, dim=-1, keepdim=True)
+        if with_p:
+            return q, p
         else:
-            return p
+            return q
 
     @torch.no_grad()
     def get_target(self, obs, action, reward, discount):
