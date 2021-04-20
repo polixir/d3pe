@@ -1,5 +1,7 @@
 import torch
+import numpy as np
 from torch import nn
+from typing import Optional
 
 from d3pe.utils.func import soft_clamp
 
@@ -77,20 +79,30 @@ class GaussianActor(torch.nn.Module):
                  obs_dim : int,
                  action_dim : int,
                  features : int,
-                 layers : int) -> None:
+                 layers : int,
+                 std : Optional[np.ndarray] = None) -> None:
         super().__init__()
         self.obs_dim = obs_dim
         self.action_dim = action_dim
         self.features = features
         self.layers = layers
 
-        self.backbone = MLP(obs_dim, 2 * action_dim, features, layers)
+        if std is not None:
+            self.register_buffer('std', torch.as_tensor(std).float())
+            self.backbone = MLP(obs_dim, action_dim, features, layers)
+        else:
+            self.std = None
+            self.backbone = MLP(obs_dim, 2 * action_dim, features, layers)
 
-    def forward(self, obs):
+    def forward(self, obs : torch.Tensor) -> torch.distributions.Distribution:
         output = self.backbone(obs)
-        mu, log_std = torch.chunk(output, 2, dim=-1)
-        log_std = soft_clamp(log_std, -2, 2)
-        std = torch.exp(log_std)
+        if self.std is not None:
+            mu = output
+            std = self.std
+        else:
+            mu, log_std = torch.chunk(output, 2, dim=-1)
+            log_std = soft_clamp(log_std, -10, 1)
+            std = torch.exp(log_std)
         return torch.distributions.Normal(mu, std)
 
 class DistributionalCritic(torch.nn.Module):

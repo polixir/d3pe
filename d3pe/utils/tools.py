@@ -1,36 +1,73 @@
 ''' This file contain common tools shared across different OPE algorithms '''
 
 import torch
+import numpy as np
 from tqdm import tqdm
 from copy import deepcopy
 from typing import Optional, Union
 from d3pe.utils.data import OPEDataset, to_torch
 from d3pe.evaluator import Policy
-from d3pe.utils.net import MLP, DistributionalCritic
+from d3pe.utils.net import MLP, DistributionalCritic, GaussianActor
 
 def bc(dataset : OPEDataset, 
-       policy : Policy, 
-       optim : torch.optim.Optimizer,
-       steps : int = 100000,
+       policy : GaussianActor, 
+       val_ratio : float = 0.2,
+       batch_size : int = 256,
+       epoch : int = 20,
+       lr : float = 3e-4,
+       weight_decay : float = 1e-5,
        verbose : bool = False):
 
+    best_parameters = deepcopy(policy.state_dict())
+    best_loss = float('inf')
+
     ''' clone the policy in the dataset '''
+    dataset_size = len(dataset)
+    val_size = int(dataset_size * val_ratio)
+    train_size = dataset_size - val_size
+    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+
+    optim = torch.optim.Adam(policy.parameters(), lr=lr, weight_decay=weight_decay)
     
     device = next(policy.parameters()).device
     
-    if verbose: timer = tqdm(total=steps)
+    if verbose: timer = tqdm(total=epoch)
 
-    for _ in range(steps):
-        data = dataset.sample(256)
-        data = to_torch(data, device=device)
-        action_dist = policy(data['obs'])
-        loss = - action_dist.log_prob(data['action']).mean()
-        
-        optim.zero_grad()
-        loss.backward()
-        optim.step()
+    for _ in range(epoch):
+        policy.train()
+        train_losses = []
+        for data in iter(train_loader):
+            data = to_torch(data, device=device)
+            action_dist = policy(data['obs'])
+            loss = - action_dist.log_prob(data['action']).mean()
+            train_losses.append(loss.item())
+            
+            optim.zero_grad()
+            loss.backward()
+            optim.step()
 
-        if verbose: timer.update(1)
+        policy.eval()
+        with torch.no_grad():
+            val_loss = 0
+            for data in iter(val_loader):
+                data = to_torch(data, device=device)
+                action_dist = policy(data['obs'])
+                val_loss += - action_dist.log_prob(data['action']).sum().item()
+        val_loss /= len(val_dataset) * data['action'].shape[-1]
+
+        if val_loss < best_loss:
+            best_loss = val_loss
+            best_parameters = deepcopy(policy.state_dict())
+
+        if verbose: 
+            timer.update(1)
+            timer.set_description('train : %.3f, val : %.3f, best : %.3f' % (np.mean(train_losses), val_loss, best_loss))
+
+    if verbose: timer.close()
+
+    policy.load_state_dict(best_parameters)
 
     return policy
 
@@ -118,5 +155,8 @@ def FQI(dataset : OPEDataset,
 
             if verbose:
                 counter.update(1)
+                counter.set_description('loss : %.3f' % critic_loss.item())
+        
+        if verbose: counter.close()
 
         return critic

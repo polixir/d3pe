@@ -38,8 +38,7 @@ class FQEEvaluator(Evaluator):
             # clone the behaviorial policy
             data = self.dataset[0]
             policy = GaussianActor(data['obs'].shape[-1], data['action'].shape[-1], 1024, 2).to(self.device)
-            optim = torch.optim.Adam(policy.parameters(), lr=1e-3)
-            policy = bc(self.dataset, policy, optim, steps=10000)
+            policy = bc(self.dataset, policy, epoch=10, verbose=verbose)
 
             policy.get_action = lambda x: policy(x).mean
             self.init_critic = FQI(self.dataset, policy, 

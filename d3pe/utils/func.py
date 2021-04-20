@@ -1,7 +1,10 @@
 import torch
+import numpy as np
 from torch.functional import F
 
-from typing import Optional, Union
+from typing import Any, List, Optional, Union
+
+from d3pe.evaluator import Evaluator
 
 def soft_clamp(x : torch.Tensor, 
                _min : Optional[Union[torch.Tensor, float]] = None, 
@@ -13,7 +16,13 @@ def soft_clamp(x : torch.Tensor,
         x = _min + F.softplus(x - _min)
     return x
 
-def get_evaluator_by_name(ope_algo : str):
+def vector_stack(vectors : List[np.ndarray], padding_value : float):
+    ''' stack vectors of scalar with different length '''
+    max_length = max([len(vector) for vector in vectors])
+    vectors = [np.pad(vector, pad_width=(0, max_length - len(vector)), constant_values=(padding_value)) for vector in vectors]
+    return np.stack(vectors)
+
+def get_evaluator_by_name(ope_algo : str) -> Evaluator:
     if ope_algo == 'online':
         from d3pe.evaluator.online import OnlineEvaluator
         return OnlineEvaluator

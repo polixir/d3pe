@@ -4,6 +4,7 @@ from copy import deepcopy
 from torch.utils.tensorboard import SummaryWriter
 
 from d3pe.evaluator import Evaluator, Policy
+from d3pe.utils.func import vector_stack
 from d3pe.utils.data import OPEDataset, to_torch
 from d3pe.utils.tools import bc
 from d3pe.utils.net import GaussianActor
@@ -12,22 +13,28 @@ class ISEvaluator(Evaluator):
     def initialize(self, 
                    train_dataset : OPEDataset = None, 
                    val_dataset : OPEDataset = None, 
+                   bc_epoch : int = 20,
                    gamma : float = 0.99,
-                   device : str = "cuda" if torch.cuda.is_available() else "cpu",
+                   device : str = 'cuda' if torch.cuda.is_available() else 'cpu',
+                   mode : str = 'step',
                    log : str = None,
+                   verbose : bool = False,
                    *args, **kwargs):
         assert train_dataset is not None or val_dataset is not None, 'you need to provide at least one dataset to run IS'
         self.dataset = val_dataset or train_dataset
         assert self.dataset.has_trajectory, 'Important Sampling Evaluator only work with trajectory dataset!'
+        assert mode in ['trajectory', 'step'], 'mode should be chosen from `trajectory` and `step`'
+        self.bc_epoch = bc_epoch
         self.gamma = gamma
         self.device = device
+        self.mode = mode
+        self.verbose = verbose
         self.writer = SummaryWriter(log) if log is not None else None
 
         ''' clone the behaviorial policy '''
         data = self.dataset[0]
-        behavior_policy = GaussianActor(data['obs'].shape[-1], data['action'].shape[-1], 1024, 2).to(self.device)
-        behavior_policy_optim = torch.optim.Adam(behavior_policy.parameters(), lr=1e-3)
-        self.behavior_policy = bc(self.dataset, behavior_policy, behavior_policy_optim, 10000)
+        behavior_policy = GaussianActor(data['obs'].shape[-1], data['action'].shape[-1], 512, 2, std=self.dataset[:]['action'].std(axis=0)).to(self.device)
+        self.behavior_policy = bc(self.dataset, behavior_policy, epoch=self.bc_epoch, verbose=self.verbose)
 
         self.is_initialized = True
 
@@ -38,6 +45,7 @@ class ISEvaluator(Evaluator):
         policy = policy.to(self.device)
 
         ''' recover the evaluated policy '''
+        # relabel the dataset with action from evaluated policy
         recover_dataset = deepcopy(self.dataset)
         obs = recover_dataset.data['obs']
         recovered_action = []
@@ -46,28 +54,52 @@ class ISEvaluator(Evaluator):
                 recovered_action.append(policy.get_action(obs[i*256:(i+1)*256]))
             recover_dataset.data['action'] = np.concatenate(recovered_action, axis=0)
         data = recover_dataset[0]
-        recover_policy = GaussianActor(data['obs'].shape[-1], data['action'].shape[-1], 1024, 2).to(self.device)
-        recover_policy_optim = torch.optim.Adam(recover_policy.parameters(), lr=1e-3)
-        recover_policy = bc(self.dataset, recover_policy, recover_policy_optim, 10000)
+        # recover the conditional distribution of evaluated policy
+        recover_policy = GaussianActor(data['obs'].shape[-1], data['action'].shape[-1], 512, 2, std=self.dataset[:]['action'].std(axis=0)).to(self.device)
+        recover_policy = bc(self.dataset, recover_policy, epoch=self.bc_epoch, verbose=self.verbose)
 
-        with torch.no_grad():
-            ratios = []
-            discounted_rewards = []
-            for traj in self.dataset.get_trajectory():
-                traj = to_torch(traj, device=self.device)
-                behavior_action_dist = self.behavior_policy(traj['obs'])
-                behavior_policy_log_prob = behavior_action_dist.log_prob(traj['action']).sum(dim=-1, keepdim=True)
-                evaluated_action_dist = recover_policy(traj['obs'])
-                evaluated_policy_log_prob = evaluated_action_dist.log_prob(traj['action']).sum(dim=-1, keepdim=True)
-                ratio = evaluated_policy_log_prob - behavior_policy_log_prob
-                ratio = torch.sum(ratio, dim=0)
-                ratios.append(ratio)
-                discounted_reward = traj['reward'] * (self.gamma ** torch.arange(traj['reward'].shape[0], device=self.device).unsqueeze(dim=-1))
-                discounted_reward = torch.sum(discounted_reward, dim=0)
-                discounted_rewards.append(discounted_reward)
-            ratios = torch.cat(ratios)
-            # ratios = (ratios - ratios.mean()) / ratios.std() # this can prevent dominatation of a single trajectory
-            ratios = torch.softmax(ratios, dim=0)
-            discounted_rewards = torch.cat(discounted_rewards)
-            
-        return torch.sum(discounted_rewards * ratios).item()
+        if self.mode == 'trajectory':
+            with torch.no_grad():
+                ratios = []
+                discounted_rewards = []
+                for traj in self.dataset.get_trajectory():
+                    traj = to_torch(traj, device=self.device)
+                    behavior_action_dist = self.behavior_policy(traj['obs'])
+                    behavior_policy_log_prob = behavior_action_dist.log_prob(traj['action']).sum(dim=-1, keepdim=True)
+                    evaluated_action_dist = recover_policy(traj['obs'])
+                    evaluated_policy_log_prob = evaluated_action_dist.log_prob(traj['action']).sum(dim=-1, keepdim=True)
+                    ratio = evaluated_policy_log_prob - behavior_policy_log_prob
+                    ratio = torch.sum(ratio, dim=0)
+                    ratios.append(ratio)
+                    discounted_reward = traj['reward'] * (self.gamma ** torch.arange(traj['reward'].shape[0], device=self.device).unsqueeze(dim=-1))
+                    discounted_reward = torch.sum(discounted_reward, dim=0)
+                    discounted_rewards.append(discounted_reward)
+                ratios = torch.cat(ratios)
+                ratios = torch.softmax(ratios, dim=0)
+                discounted_rewards = torch.cat(discounted_rewards)
+                
+            return torch.sum(discounted_rewards * ratios).item()
+        elif self.mode == 'step':
+            with torch.no_grad():
+                ratios = []
+                discounted_rewards = []
+                for traj in self.dataset.get_trajectory():
+                    traj = to_torch(traj, device=self.device)
+                    behavior_action_dist = self.behavior_policy(traj['obs'])
+                    behavior_policy_log_prob = behavior_action_dist.log_prob(traj['action']).sum(dim=-1)
+                    evaluated_action_dist = recover_policy(traj['obs'])
+                    evaluated_policy_log_prob = evaluated_action_dist.log_prob(traj['action']).sum(dim=-1)
+                    ratio = evaluated_policy_log_prob - behavior_policy_log_prob
+                    ratio = torch.cumsum(ratio, dim=0)
+                    discounted_reward = traj['reward'].squeeze() * (self.gamma ** torch.arange(traj['reward'].shape[0], device=self.device))
+                    
+                    ratios.append(ratio.cpu().numpy())
+                    discounted_rewards.append(discounted_reward.cpu().numpy())
+
+                ratios = vector_stack(ratios, - float('inf'))
+                ratios = torch.as_tensor(ratios)
+                ratios = torch.softmax(ratios, dim=0).numpy() * ratios.shape[0]
+                discounted_rewards = vector_stack(discounted_rewards, 0)
+                discounted_rewards = np.sum(discounted_rewards * ratios, axis=1)
+                
+            return float(np.mean(discounted_rewards))
