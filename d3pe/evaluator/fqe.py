@@ -13,7 +13,7 @@ class FQEEvaluator(Evaluator):
                    pretrain : bool = False, 
                    critic_hidden_features : int = 1024,
                    critic_hidden_layers : int = 4,
-                   critic_type : str = 'distributional',
+                   critic_type : str = 'mlp',
                    atoms : int = 51,
                    gamma : float = 0.99,
                    device : str = "cuda" if torch.cuda.is_available() else "cpu",

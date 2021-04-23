@@ -14,10 +14,10 @@ scp 10.200.0.10:~/data/ope_benchmarks.tar ./
 tar -xvf ope_benchmarks.tar
 ```
 
-Then you can lauch the ope algorithm to evaluate the policies of certain task in the benchmarks, e.g.
+Then you can launch the ope algorithm to evaluate the policies of certain task in the benchmarks, e.g.
 
 ```bash
-python scripts/lauch_ope.py --domain HalfCheetah-v3 --level low --amount 99 -on online -oa online
+python scripts/launch_ope.py --domain HalfCheetah-v3 --level low --amount 99 -on online -oa online
 ```
 
 Then you can evaluate the result of that algorithm by:
