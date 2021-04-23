@@ -23,6 +23,7 @@ def vector_stack(vectors : List[np.ndarray], padding_value : float):
     return np.stack(vectors)
 
 def get_evaluator_by_name(ope_algo : str) -> Evaluator:
+    ope_algo = ope_algo.lower()
     if ope_algo == 'online':
         from d3pe.evaluator.online import OnlineEvaluator
         return OnlineEvaluator
@@ -35,5 +36,8 @@ def get_evaluator_by_name(ope_algo : str) -> Evaluator:
     elif ope_algo == 'is':
         from d3pe.evaluator.IS import ISEvaluator
         return ISEvaluator
+    elif ope_algo == 'dr' or ope_algo == 'doubly-robust':
+        from d3pe.evaluator.doubly_robust import DREvaluator
+        return DREvaluator
     else:
         raise KeyError(f'Algorithm {ope_algo} is not supported!')

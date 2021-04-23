@@ -92,10 +92,7 @@ def FQI(dataset : OPEDataset,
 
         writer = torch.utils.tensorboard.SummaryWriter(log) if log is not None else None
 
-        min_reward = dataset[:]['reward'].min()
-        max_reward = dataset[:]['reward'].max()
-        max_value = (1.2 * max_reward - 0.2 * min_reward) / (1 - gamma)
-        min_value = (1.2 * min_reward - 0.2 * max_reward) / (1 - gamma)
+        min_value, max_value = dataset.get_value_boundary(gamma)
 
         policy = deepcopy(policy)
         policy = policy.to(device)
@@ -155,7 +152,7 @@ def FQI(dataset : OPEDataset,
 
             if verbose:
                 counter.update(1)
-                counter.set_description('loss : %.3f' % critic_loss.item())
+                counter.set_description('loss : %.3f, q : %.3f' % (critic_loss.item(), q.mean().item()))
         
         if verbose: counter.close()
 

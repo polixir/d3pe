@@ -37,6 +37,17 @@ class OPEDataset(torch.utils.data.Dataset):
     def __getitem__(self, index) -> Dict[str, np.ndarray]:
         return {k : v[index] for k, v in self.data.items()}
 
+    def get_reward_boundary(self) -> Tuple[float, float]:
+        min_reward = self.data['reward'].min()
+        max_reward = self.data['reward'].max()
+        return min_reward, max_reward
+
+    def get_value_boundary(self, gamma : float, enlarge_ratio : float = 0.2) -> Tuple[float, float]:
+        min_reward, max_reward = self.get_reward_boundary()
+        min_value = (min_reward - enlarge_ratio * (max_reward - min_reward)) / (1 - gamma)
+        max_value = (max_reward + enlarge_ratio * (max_reward - min_reward)) / (1 - gamma)
+        return min_value, max_value
+
 def get_neorl_datasets(task : str, level : str, amount : int) -> Tuple[OPEDataset, OPEDataset]:
     env = neorl.make(task)
     train_data, val_data = env.get_dataset(data_type=level, train_num=amount)
