@@ -11,6 +11,7 @@ class FQEEvaluator(Evaluator):
                    train_dataset : OPEDataset = None, 
                    val_dataset : OPEDataset = None, 
                    pretrain : bool = False, 
+                   fqi_steps : int = 250000,
                    critic_hidden_features : int = 1024,
                    critic_hidden_layers : int = 4,
                    critic_type : str = 'mlp',
@@ -23,6 +24,7 @@ class FQEEvaluator(Evaluator):
         assert train_dataset is not None or val_dataset is not None, 'you need to provide at least one dataset to run FQE'
         self.dataset = val_dataset or train_dataset
         self.pretrain = pretrain
+        self.fqi_steps = fqi_steps
         self.critic_hidden_features = critic_hidden_features
         self.critic_hidden_layers = critic_hidden_layers
         self.critic_type = critic_type
@@ -42,7 +44,7 @@ class FQEEvaluator(Evaluator):
 
             policy.get_action = lambda x: policy(x).mean
             self.init_critic = FQI(self.dataset, policy, 
-                                   num_steps=100000, 
+                                   num_steps=self.fqi_steps // 2, 
                                    init_critic=self.init_critic,
                                    critic_hidden_features=self.critic_hidden_features,
                                    critic_hidden_layers=self.critic_hidden_layers,
@@ -62,7 +64,7 @@ class FQEEvaluator(Evaluator):
         policy = deepcopy(policy)
         policy = policy.to(self.device)
         
-        num_steps = 250000 if self.pretrain else 500000 
+        num_steps = self.fqi_steps // 2 if self.pretrain else self.fqi_steps 
         critic = FQI(self.dataset, policy, 
                      num_steps=num_steps, 
                      init_critic=self.init_critic,
