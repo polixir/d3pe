@@ -6,7 +6,7 @@ from torch.utils.tensorboard import SummaryWriter
 from d3pe.evaluator import Evaluator, Policy
 from d3pe.utils.data import OPEDataset, to_torch
 from d3pe.utils.tools import bc, FQI
-from d3pe.utils.net import GaussianActor
+from d3pe.utils.func import hard_clamp
 
 class DREvaluator(Evaluator):
     r'''
@@ -43,10 +43,11 @@ class DREvaluator(Evaluator):
         self.log = log
         self.writer = SummaryWriter(log) if log is not None else None
 
+        self.max_actions = torch.as_tensor(self.dataset[:]['action'].max(axis=0)).to(self.device)
+        self.min_actions = torch.as_tensor(self.dataset[:]['action'].min(axis=0)).to(self.device)
+
         ''' clone the behaviorial policy '''
-        data = self.dataset[0]
-        behavior_policy = GaussianActor(data['obs'].shape[-1], data['action'].shape[-1], 512, 2, std=self.dataset[:]['action'].std(axis=0)).to(self.device)
-        self.behavior_policy = bc(self.dataset, behavior_policy, epoch=self.bc_epoch, verbose=self.verbose)
+        self.behavior_policy = bc(self.dataset, epoch=self.bc_epoch, verbose=self.verbose)
 
         self.is_initialized = True
 
@@ -77,8 +78,7 @@ class DREvaluator(Evaluator):
             recover_dataset.data['action'] = np.concatenate(recovered_action, axis=0)
         data = recover_dataset[0]
         # recover the conditional distribution of evaluated policy
-        recover_policy = GaussianActor(data['obs'].shape[-1], data['action'].shape[-1], 512, 2, std=self.dataset[:]['action'].std(axis=0)).to(self.device)
-        recover_policy = bc(self.dataset, recover_policy, epoch=self.bc_epoch, verbose=self.verbose)
+        recover_policy = bc(self.dataset, max_actions=self.max_actions, min_actions=self.min_actions, epoch=self.bc_epoch, verbose=self.verbose)
 
         with torch.no_grad():
             estimations = []
@@ -87,9 +87,10 @@ class DREvaluator(Evaluator):
 
                 # compute rho
                 behavior_action_dist = self.behavior_policy(traj['obs'])
-                behavior_policy_log_prob = behavior_action_dist.log_prob(traj['action']).sum(dim=-1)
+                action = hard_clamp(traj['action'], self.min_actions, self.max_actions, shrink=5e-5)
+                behavior_policy_log_prob = behavior_action_dist.log_prob(action).sum(dim=-1)
                 evaluated_action_dist = recover_policy(traj['obs'])
-                evaluated_policy_log_prob = evaluated_action_dist.log_prob(traj['action']).sum(dim=-1)
+                evaluated_policy_log_prob = evaluated_action_dist.log_prob(action).sum(dim=-1)
                 rho = torch.exp(evaluated_policy_log_prob - behavior_policy_log_prob)
 
                 # compute reward and value

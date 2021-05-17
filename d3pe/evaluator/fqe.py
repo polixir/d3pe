@@ -4,7 +4,6 @@ from copy import deepcopy
 from d3pe.evaluator import Evaluator, Policy
 from d3pe.utils.data import OPEDataset
 from d3pe.utils.tools import bc, FQI
-from d3pe.utils.net import GaussianActor
 
 class FQEEvaluator(Evaluator):
     def initialize(self, 
@@ -38,9 +37,7 @@ class FQEEvaluator(Evaluator):
             '''implement a base value function here'''
 
             # clone the behaviorial policy
-            data = self.dataset[0]
-            policy = GaussianActor(data['obs'].shape[-1], data['action'].shape[-1], 1024, 2).to(self.device)
-            policy = bc(self.dataset, policy, epoch=10, verbose=verbose)
+            policy = bc(self.dataset, epoch=20, verbose=verbose)
 
             policy.get_action = lambda x: policy(x).mean
             self.init_critic = FQI(self.dataset, policy, 

@@ -16,6 +16,24 @@ def soft_clamp(x : torch.Tensor,
         x = _min + F.softplus(x - _min)
     return x
 
+def hard_clamp(x : torch.Tensor, 
+               _min : Optional[Union[torch.Tensor, float]] = None, 
+               _max : Optional[Union[torch.Tensor, float]] = None,
+               shrink : Optional[float] = None) -> torch.Tensor:
+    # clamp tensor values
+
+    if shrink is not None:
+        assert _min is not None and _max is not None
+        shrink_amount = (_max - _min) * shrink
+        _min = _min + shrink_amount
+        _max = _max - shrink_amount
+
+    if _max is not None:
+        x = torch.min(x, _max)
+    if _min is not None:
+        x = torch.max(x, _min)
+    return x
+
 def vector_stack(vectors : List[np.ndarray], padding_value : float):
     ''' stack vectors of scalar with different length '''
     max_length = max([len(vector) for vector in vectors])

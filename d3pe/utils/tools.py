@@ -7,21 +7,34 @@ from copy import deepcopy
 from typing import Optional, Union
 from d3pe.utils.data import OPEDataset, to_torch
 from d3pe.evaluator import Policy
-from d3pe.utils.net import MLP, DistributionalCritic, GaussianActor
+from d3pe.utils.net import MLP, DistributionalCritic, TanhGaussianActor
+from d3pe.utils.func import hard_clamp
 
 def bc(dataset : OPEDataset, 
-       policy : GaussianActor, 
+       max_actions : Optional[Union[torch.Tensor, np.ndarray, float]] = None,
+       min_actions : Optional[Union[torch.Tensor, np.ndarray, float]] = None,
+       policy_features : int = 256,
+       policy_layers : int = 2,
        val_ratio : float = 0.2,
        batch_size : int = 256,
        epoch : int = 20,
        lr : float = 3e-4,
        weight_decay : float = 1e-5,
-       verbose : bool = False):
+       device : str = "cuda" if torch.cuda.is_available() else "cpu",
+       verbose : bool = False) -> TanhGaussianActor:
+
+    ''' clone the policy in the dataset '''
+
+    data = dataset[0]
+    if max_actions is None: max_actions = dataset[:]['action'].max(axis=0)
+    if min_actions is None: min_actions = dataset[:]['action'].min(axis=0)
+    policy = TanhGaussianActor(data['obs'].shape[-1], data['action'].shape[-1], policy_features, policy_layers, max_actions, min_actions).to(device)
+    max_actions = torch.as_tensor(max_actions, dtype=torch.float32, device=device)
+    min_actions = torch.as_tensor(min_actions, dtype=torch.float32, device=device)
 
     best_parameters = deepcopy(policy.state_dict())
     best_loss = float('inf')
-
-    ''' clone the policy in the dataset '''
+    
     dataset_size = len(dataset)
     val_size = int(dataset_size * val_ratio)
     train_size = dataset_size - val_size
@@ -29,7 +42,7 @@ def bc(dataset : OPEDataset,
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    optim = torch.optim.Adam(policy.parameters(), lr=lr, weight_decay=weight_decay)
+    optim = torch.optim.AdamW(policy.parameters(), lr=lr, weight_decay=weight_decay)
     
     device = next(policy.parameters()).device
     
@@ -41,7 +54,7 @@ def bc(dataset : OPEDataset,
         for data in iter(train_loader):
             data = to_torch(data, device=device)
             action_dist = policy(data['obs'])
-            loss = - action_dist.log_prob(data['action']).mean()
+            loss = - action_dist.log_prob(hard_clamp(data['action'], max_actions, min_actions, shrink=5e-5)).mean()
             train_losses.append(loss.item())
             
             optim.zero_grad()
@@ -54,7 +67,7 @@ def bc(dataset : OPEDataset,
             for data in iter(val_loader):
                 data = to_torch(data, device=device)
                 action_dist = policy(data['obs'])
-                val_loss += - action_dist.log_prob(data['action']).sum().item()
+                val_loss += - action_dist.log_prob(hard_clamp(data['action'], max_actions, min_actions, shrink=5e-5)).sum().item()
         val_loss /= len(val_dataset) * data['action'].shape[-1]
 
         if val_loss < best_loss:

@@ -75,6 +75,9 @@ class MLP(nn.Module):
         return out
 
 class GaussianActor(torch.nn.Module):
+    MAX_LOGSTD = 2
+    MIN_LOGSTD = -5
+    
     def __init__(self,
                  obs_dim : int,
                  action_dim : int,
@@ -101,9 +104,55 @@ class GaussianActor(torch.nn.Module):
             std = self.std
         else:
             mu, log_std = torch.chunk(output, 2, dim=-1)
-            log_std = soft_clamp(log_std, -10, 1)
+            log_std = soft_clamp(log_std, self.MIN_LOGSTD, self.MAX_LOGSTD)
             std = torch.exp(log_std)
         return torch.distributions.Normal(mu, std)
+
+class TransformedDistribution(torch.distributions.TransformedDistribution):
+    @property
+    def mean(self):
+        x = self.base_dist.mean
+        for transform in self.transforms:
+            x = transform(x)
+        return x
+
+class TanhGaussianActor(torch.nn.Module):
+    # Make std greater than 1 will increase the logprob on contrary direction.
+    # See more in https://www.desmos.com/calculator/wweev47yyp
+    MAX_LOGSTD = 0
+    MIN_LOGSTD = -5
+
+    def __init__(self,
+                 obs_dim : int,
+                 action_dim : int,
+                 features : int,
+                 layers : int,
+                 max_actions : np.ndarray,
+                 min_actions : np.ndarray,) -> None:
+        super().__init__()
+
+        self.obs_dim = obs_dim
+        self.action_dim = action_dim
+        self.features = features
+        self.layers = layers
+
+        self.backbone = MLP(obs_dim, 2 * action_dim, features, layers)
+
+        self.register_buffer('action_mean', torch.nn.Parameter(torch.as_tensor((max_actions + min_actions) / 2, dtype=torch.float32)))
+        self.register_buffer('action_scale', torch.nn.Parameter(torch.as_tensor((max_actions - min_actions) / 2, dtype=torch.float32)))
+
+    def forward(self, obs : torch.Tensor) -> torch.distributions.Distribution:
+        output = self.backbone(obs)
+        mu, log_std = torch.chunk(output, 2, dim=-1)
+        log_std = self.MIN_LOGSTD + (self.MAX_LOGSTD - self.MIN_LOGSTD) / 2 * (torch.tanh(log_std) + 1)
+        std = torch.exp(log_std)
+
+        return TransformedDistribution(
+            torch.distributions.Normal(mu, std),
+            torch.distributions.transforms.ComposeTransform([
+                torch.distributions.transforms.TanhTransform(),
+                torch.distributions.transforms.AffineTransform(self.action_mean, self.action_scale)
+            ]))
 
 class DistributionalCritic(torch.nn.Module):
     def __init__(self, 
