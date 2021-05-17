@@ -76,9 +76,8 @@ class DREvaluator(Evaluator):
             for i in range(obs.shape[0] // 256 + (obs.shape[0] % 256 > 0)):
                 recovered_action.append(policy.get_action(obs[i*256:(i+1)*256]))
             recover_dataset.data['action'] = np.concatenate(recovered_action, axis=0)
-        data = recover_dataset[0]
         # recover the conditional distribution of evaluated policy
-        recover_policy = bc(self.dataset, max_actions=self.max_actions, min_actions=self.min_actions, epoch=self.bc_epoch, verbose=self.verbose)
+        recover_policy = bc(recover_dataset, max_actions=self.max_actions, min_actions=self.min_actions, epoch=self.bc_epoch, verbose=self.verbose)
 
         with torch.no_grad():
             estimations = []
