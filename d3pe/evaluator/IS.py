@@ -30,8 +30,9 @@ class ISEvaluator(Evaluator):
         self.verbose = verbose
         self.writer = SummaryWriter(log) if log is not None else None
 
-        self.max_actions = torch.as_tensor(self.dataset[:]['action'].max(axis=0)).to(self.device)
-        self.min_actions = torch.as_tensor(self.dataset[:]['action'].min(axis=0)).to(self.device)
+        self.min_actions, self.max_actions = self.dataset.get_action_boundary()
+        self.min_actions = torch.as_tensor(self.min_actions, dtype=torch.float32, device=self.device)
+        self.max_actions = torch.as_tensor(self.max_actions, dtype=torch.float32, device=self.device)
 
         ''' clone the behaviorial policy '''
         self.behavior_policy = bc(self.dataset, epoch=self.bc_epoch, verbose=self.verbose)
@@ -54,7 +55,7 @@ class ISEvaluator(Evaluator):
                 recovered_action.append(policy.get_action(obs[i*256:(i+1)*256]))
             recover_dataset.data['action'] = np.concatenate(recovered_action, axis=0)
         # recover the conditional distribution of evaluated policy
-        recover_policy = bc(recover_dataset, max_actions=self.max_actions, min_actions=self.min_actions, epoch=self.bc_epoch, verbose=self.verbose)
+        recover_policy = bc(recover_dataset, min_actions=self.min_actions, max_actions=self.max_actions, epoch=self.bc_epoch, verbose=self.verbose)
 
         if self.mode == 'trajectory':
             with torch.no_grad():

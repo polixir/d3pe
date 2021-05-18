@@ -11,8 +11,8 @@ from d3pe.utils.net import MLP, DistributionalCritic, TanhGaussianActor
 from d3pe.utils.func import hard_clamp
 
 def bc(dataset : OPEDataset, 
-       max_actions : Optional[Union[torch.Tensor, np.ndarray, float]] = None,
        min_actions : Optional[Union[torch.Tensor, np.ndarray, float]] = None,
+       max_actions : Optional[Union[torch.Tensor, np.ndarray, float]] = None,
        policy_features : int = 256,
        policy_layers : int = 2,
        val_ratio : float = 0.2,
@@ -26,9 +26,9 @@ def bc(dataset : OPEDataset,
     ''' clone the policy in the dataset '''
 
     data = dataset[0]
-    if max_actions is None: max_actions = dataset[:]['action'].max(axis=0)
-    if min_actions is None: min_actions = dataset[:]['action'].min(axis=0)
-    policy = TanhGaussianActor(data['obs'].shape[-1], data['action'].shape[-1], policy_features, policy_layers, max_actions, min_actions).to(device)
+    if min_actions is None: min_actions = dataset.get_action_boundary()[0]
+    if max_actions is None: max_actions = dataset.get_action_boundary()[1]
+    policy = TanhGaussianActor(data['obs'].shape[-1], data['action'].shape[-1], policy_features, policy_layers, min_actions, max_actions).to(device)
     max_actions = torch.as_tensor(max_actions, dtype=torch.float32, device=device)
     min_actions = torch.as_tensor(min_actions, dtype=torch.float32, device=device)
 
@@ -54,7 +54,7 @@ def bc(dataset : OPEDataset,
         for data in iter(train_loader):
             data = to_torch(data, device=device)
             action_dist = policy(data['obs'])
-            loss = - action_dist.log_prob(hard_clamp(data['action'], max_actions, min_actions, shrink=5e-5)).mean()
+            loss = - action_dist.log_prob(hard_clamp(data['action'], min_actions, max_actions, shrink=5e-5)).mean()
             train_losses.append(loss.item())
             
             optim.zero_grad()
@@ -67,7 +67,7 @@ def bc(dataset : OPEDataset,
             for data in iter(val_loader):
                 data = to_torch(data, device=device)
                 action_dist = policy(data['obs'])
-                val_loss += - action_dist.log_prob(hard_clamp(data['action'], max_actions, min_actions, shrink=5e-5)).sum().item()
+                val_loss += - action_dist.log_prob(hard_clamp(data['action'], min_actions, max_actions, shrink=5e-5)).sum().item()
         val_loss /= len(val_dataset) * data['action'].shape[-1]
 
         if val_loss < best_loss:

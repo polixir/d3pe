@@ -127,8 +127,8 @@ class TanhGaussianActor(torch.nn.Module):
                  action_dim : int,
                  features : int,
                  layers : int,
-                 max_actions : np.ndarray,
-                 min_actions : np.ndarray,) -> None:
+                 min_actions : np.ndarray,
+                 max_actions : np.ndarray,) -> None:
         super().__init__()
 
         self.obs_dim = obs_dim
@@ -138,8 +138,8 @@ class TanhGaussianActor(torch.nn.Module):
 
         self.backbone = MLP(obs_dim, 2 * action_dim, features, layers)
 
-        self.register_buffer('action_mean', torch.nn.Parameter(torch.as_tensor((max_actions + min_actions) / 2, dtype=torch.float32)))
-        self.register_buffer('action_scale', torch.nn.Parameter(torch.as_tensor((max_actions - min_actions) / 2, dtype=torch.float32)))
+        self.register_buffer('action_mean', torch.nn.Parameter(torch.as_tensor((max_actions + min_actions) / 2, dtype=torch.float32), requires_grad=False))
+        self.register_buffer('action_scale', torch.nn.Parameter(torch.as_tensor((max_actions - min_actions) / 2, dtype=torch.float32), requires_grad=False))
 
     def forward(self, obs : torch.Tensor) -> torch.distributions.Distribution:
         output = self.backbone(obs)

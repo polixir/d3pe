@@ -1,10 +1,16 @@
 import torch
+import random
 import numpy as np
 from torch.functional import F
 
 from typing import Any, List, Optional, Union
 
 from d3pe.evaluator import Evaluator
+
+def setup_seed(seed : int):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
 
 def soft_clamp(x : torch.Tensor, 
                _min : Optional[Union[torch.Tensor, float]] = None, 

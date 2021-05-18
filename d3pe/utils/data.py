@@ -1,3 +1,4 @@
+import gym
 import torch
 import numpy as np
 
@@ -6,7 +7,11 @@ import neorl
 from typing import *
 
 class OPEDataset(torch.utils.data.Dataset):
-    def __init__(self, data : Dict[str, np.ndarray], start_indexes : Optional[np.ndarray] = None) -> None:
+    def __init__(self, 
+                 data : Dict[str, np.ndarray], 
+                 start_indexes : Optional[np.ndarray] = None,
+                 obs_space : Optional[gym.Space] = None,
+                 action_space : Optional[gym.Space] = None,) -> None:
         super().__init__()
         self.data = data
         self.total_size = self.data['obs'].shape[0]
@@ -14,6 +19,12 @@ class OPEDataset(torch.utils.data.Dataset):
         if self.has_trajectory:
             self.trajectory_number = self.start_indexes.shape[0]
             self.end_indexes = np.concatenate([self.start_indexes[1:], np.array([self.total_size])])
+
+        self.obs_space = obs_space
+        self.action_space = action_space
+        self.data['obs'] = np.clip(self.data['obs'], *self.get_obs_boundary())
+        self.data['next_obs'] = np.clip(self.data['next_obs'], *self.get_obs_boundary())
+        self.data['action'] = np.clip(self.data['action'], *self.get_action_boundary())
     
     @property
     def has_trajectory(self) -> bool:
@@ -48,12 +59,27 @@ class OPEDataset(torch.utils.data.Dataset):
         max_value = (max_reward + enlarge_ratio * (max_reward - min_reward)) / (1 - gamma)
         return min_value, max_value
 
+    def get_action_boundary(self) -> Tuple[np.ndarray, np.ndarray]:
+        if self.action_space is None:
+            return self.data['action'].min(axis=0), self.data['action'].max(axis=0)
+        else:
+            return self.action_space.low, self.action_space.high
+
+    def get_obs_boundary(self) -> Tuple[np.ndarray, np.ndarray]:
+        if self.obs_space is None:
+            return self.data['obs'].min(axis=0), self.data['obs'].max(axis=0)
+        else:
+            return self.obs_space.low, self.obs_space.high
+
 def get_neorl_datasets(task : str, level : str, amount : int) -> Tuple[OPEDataset, OPEDataset]:
     env = neorl.make(task)
     train_data, val_data = env.get_dataset(data_type=level, train_num=amount)
     train_start_indexes = train_data.pop('index')
     val_start_indexes = val_data.pop('index')
-    return (OPEDataset(train_data, train_start_indexes), OPEDataset(val_data, val_start_indexes))
+    return (
+        OPEDataset(train_data, train_start_indexes, obs_space=env.observation_space, action_space=env.action_space), 
+        OPEDataset(val_data, val_start_indexes, obs_space=env.observation_space, action_space=env.action_space)
+    )
 
 def to_torch(data : dict, dtype = torch.float32, device = 'cuda' if torch.cuda.is_available() else 'cpu') -> Dict[str, torch.Tensor]:
     return {k : torch.as_tensor(v, dtype=dtype, device=device) for k, v in data.items()}
