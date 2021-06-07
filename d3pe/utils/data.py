@@ -2,8 +2,6 @@ import gym
 import torch
 import numpy as np
 
-import neorl
-
 from typing import *
 
 class OPEDataset(torch.utils.data.Dataset):
@@ -72,6 +70,7 @@ class OPEDataset(torch.utils.data.Dataset):
             return self.obs_space.low, self.obs_space.high
 
 def get_neorl_datasets(task : str, level : str, amount : int) -> Tuple[OPEDataset, OPEDataset]:
+    import neorl
     env = neorl.make(task)
     train_data, val_data = env.get_dataset(data_type=level, train_num=amount)
     train_start_indexes = train_data.pop('index')
