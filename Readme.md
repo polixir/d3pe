@@ -1,27 +1,27 @@
 ## Introduction
 D3PE (Deep Data-Driven Policy Evaluation) aims to evaluation a large set of candidate policies by a fix dataset to select best ones.
 
+## Supported Algorithms
+- FQE
+- MBOPE
+- IS (WIS)
+- Doubly-Robust
+
 ## Installation
 ```bash
-bash install.sh
+pip install -e .
 ```
 
-## Benchmark
-First you need to download the models. On a Suzhou machine:
+## Usage
 
-```bash
-scp 10.200.0.10:~/data/ope_benchmarks.tar ./
-tar -xvf ope_benchmarks.tar
 ```
+from d3pe.utils.data import OPEDataset
+from d3pe.utils.func import get_evaluator_by_name
 
-Then you can launch the ope algorithm to evaluate the policies of certain task in the benchmarks, e.g.
+policy = ... # load your policy, API in d3pe.evaluator.Policy needs to be supported.
+dataset = OPEDataset(...) # load your data, see details in `d3pe.utils.data`
 
-```bash
-python scripts/launch_ope.py --domain HalfCheetah-v3 --level low --amount 99 -on online -oa online
-```
-
-Then you can evaluate the result of that algorithm by:
-
-```bash
-python scripts/eval_ope.py -d HalfCheetah-v3 --level low --amount 99 -en online
+evaluator = get_evaluator_by_name('fqe')() # create an ope evaluator, for example FQE
+evaluator.initialize(dataset) # initialize the evaluator
+ope_score = evaluator(policy) # evaluate the policy
 ```
