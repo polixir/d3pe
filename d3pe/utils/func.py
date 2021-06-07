@@ -40,7 +40,7 @@ def hard_clamp(x : torch.Tensor,
         x = torch.max(x, _min)
     return x
 
-def vector_stack(vectors : List[np.ndarray], padding_value : float):
+def vector_stack(vectors : List[np.ndarray], padding_value : float) -> np.ndarray:
     ''' stack vectors of scalar with different length '''
     max_length = max([len(vector) for vector in vectors])
     vectors = [np.pad(vector, pad_width=(0, max_length - len(vector)), constant_values=(padding_value)) for vector in vectors]

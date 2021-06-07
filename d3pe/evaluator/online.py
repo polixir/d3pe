@@ -46,7 +46,7 @@ class OnlineEvaluator(Evaluator):
         self.env = get_env(self.task)
         self.is_initialized = True
 
-    def __call__(self, policy : Policy) -> dict:
+    def __call__(self, policy : Policy) -> float:
         assert self.is_initialized, "`initialize` should be called before callback."
         policy = deepcopy(policy).cpu()
         if not ray.is_initialized():

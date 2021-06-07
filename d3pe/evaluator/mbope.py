@@ -48,7 +48,7 @@ class MBOPEEvaluator(Evaluator):
 
         self.is_initialized = True
 
-    def __call__(self, policy : Policy) -> dict:
+    def __call__(self, policy : Policy) -> float:
         assert self.is_initialized, "`initialize` should be called before call."
 
         init_state = self.dataset.get_initial_states()

@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from torch import nn
-from typing import Optional
+from typing import Optional, Tuple, Union
 
 from d3pe.utils.func import soft_clamp
 
@@ -66,7 +66,7 @@ class MLP(nn.Module):
             net.append(output_activation_creator(out_features))
             self.net = nn.Sequential(*net)
 
-    def forward(self, x):
+    def forward(self, x : torch.Tensor) -> torch.Tensor:
         r"""forward method of MLP only assume the last dim of x matches `in_features`"""
         head_shape = x.shape[:-1]
         x = x.view(-1, x.shape[-1])
@@ -110,7 +110,7 @@ class GaussianActor(torch.nn.Module):
 
 class TransformedDistribution(torch.distributions.TransformedDistribution):
     @property
-    def mean(self):
+    def mean(self) -> torch.Tensor:
         x = self.base_dist.mean
         for transform in self.transforms:
             x = transform(x)
@@ -173,7 +173,9 @@ class DistributionalCritic(torch.nn.Module):
         self.register_buffer('z', torch.linspace(min_value, max_value, atoms))
         self.delta_z = (max_value - min_value) / (atoms - 1)
 
-    def forward(self, obs, action, with_p=False):
+    def forward(self, obs : torch.Tensor, 
+                      action : torch.Tensor, 
+                      with_p : bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         obs_action = torch.cat([obs, action], dim=-1)
         logits = self.net(obs_action)
         p = torch.softmax(logits, dim=-1)
@@ -184,7 +186,7 @@ class DistributionalCritic(torch.nn.Module):
             return q
 
     @torch.no_grad()
-    def get_target(self, obs, action, reward, discount):
+    def get_target(self, obs : torch.Tensor, action : torch.Tensor, reward : torch.Tensor, discount : float):
         p = self(obs, action) # [*B, N]
 
         # shift the atoms by reward
