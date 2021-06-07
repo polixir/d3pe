@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from d3pe.evaluator import Evaluator, Policy
 from d3pe.utils.data import OPEDataset
-from d3pe.utils.tools import bc, FQI
+from d3pe.utils.tools import bc, FQE
 
 class FQEEvaluator(Evaluator):
     def initialize(self, 
@@ -40,7 +40,7 @@ class FQEEvaluator(Evaluator):
             policy = bc(self.dataset, epoch=20, verbose=verbose)
 
             policy.get_action = lambda x: policy(x).mean
-            self.init_critic = FQI(self.dataset, policy, 
+            self.init_critic = FQE(self.dataset, policy, 
                                    num_steps=self.fqi_steps // 2, 
                                    init_critic=self.init_critic,
                                    critic_hidden_features=self.critic_hidden_features,
@@ -55,14 +55,14 @@ class FQEEvaluator(Evaluator):
 
         self.is_initialized = True
 
-    def __call__(self, policy : Policy) -> dict:
+    def __call__(self, policy : Policy) -> float:
         assert self.is_initialized, "`initialize` should be called before call."
 
         policy = deepcopy(policy)
         policy = policy.to(self.device)
         
         num_steps = self.fqi_steps // 2 if self.pretrain else self.fqi_steps 
-        critic = FQI(self.dataset, policy, 
+        critic = FQE(self.dataset, policy, 
                      num_steps=num_steps, 
                      init_critic=self.init_critic,
                      critic_hidden_features=self.critic_hidden_features,

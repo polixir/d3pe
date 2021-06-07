@@ -5,7 +5,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from d3pe.evaluator import Evaluator, Policy
 from d3pe.utils.data import OPEDataset, to_torch
-from d3pe.utils.tools import bc, FQI
+from d3pe.utils.tools import bc, FQE
 from d3pe.utils.func import hard_clamp
 
 class DREvaluator(Evaluator):
@@ -58,7 +58,7 @@ class DREvaluator(Evaluator):
         policy = deepcopy(policy)
         policy = policy.to(self.device)
 
-        critic = FQI(self.dataset, policy, 
+        critic = FQE(self.dataset, policy, 
                      num_steps=self.fqi_steps, 
                      critic_hidden_features=self.critic_hidden_features,
                      critic_hidden_layers=self.critic_hidden_layers,

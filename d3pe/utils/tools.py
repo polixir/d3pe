@@ -84,7 +84,7 @@ def bc(dataset : OPEDataset,
 
     return policy
 
-def FQI(dataset : OPEDataset,
+def FQE(dataset : OPEDataset,
         policy : Policy,
         num_steps : int = 500000,
         batch_size : int = 256,
@@ -99,7 +99,7 @@ def FQI(dataset : OPEDataset,
         device : str = "cuda" if torch.cuda.is_available() else "cpu",
         log : str = None,
         verbose : bool = False,
-        *args, **kwargs):
+        *args, **kwargs) -> Union[MLP, DistributionalCritic]:
 
         ''' solve the value function of the policy given the dataset '''
 
