@@ -25,7 +25,6 @@ setup(
         'matplotlib',
         'tensorboard',
         'tqdm',
-        'tianshou',
     ],
     url="https://agit.ai/Polixir_AI/d3pe"
 )
