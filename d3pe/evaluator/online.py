@@ -41,8 +41,14 @@ def test_on_real_env(env : gym.Env, policy : Policy, number_of_runs : int = 10):
     }
 
 class OnlineEvaluator(Evaluator):
-    def initialize(self, train_dataset : OPEDataset, val_dataset : OPEDataset, task : str, *args, **kwargs):
+    def initialize(self, 
+                   train_dataset : OPEDataset, 
+                   val_dataset : OPEDataset, 
+                   task : str, 
+                   number_of_runs : int = 10, 
+                   *args, **kwargs):
         self.task = task
+        self.number_of_runs = number_of_runs
         self.env = get_env(self.task)
         self.is_initialized = True
 
@@ -51,4 +57,4 @@ class OnlineEvaluator(Evaluator):
         policy = deepcopy(policy).cpu()
         if not ray.is_initialized():
             ray.init(ignore_reinit_error=True)
-        return test_on_real_env(self.env, policy)['online_reward']
+        return test_on_real_env(self.env, policy, self.number_of_runs)['online_reward']
